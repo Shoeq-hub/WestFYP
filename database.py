@@ -2,7 +2,7 @@ import sqlite3
 import os
 #w2096743
 
-DB_FILE = "learning_curator.db"
+DB_FILE = os.path.join(os.path.expanduser("~"), "learning_curator.db")
 
 
 def get_connection():
@@ -69,7 +69,7 @@ def init_db():
 
     conn.commit()
     conn.close()
-    print(f"[DB] Database ready: {DB_FILE}")
+    # print(f"[DB] Database ready: {DB_FILE}")
 
 
 if __name__ == "__main__":

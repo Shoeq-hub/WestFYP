@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify, session, render_template, redirect, url_for
 from database import init_db, get_connection
 from auth import register_user, login_user, get_user_by_id
@@ -14,8 +15,11 @@ from article_scrape import article_to_row
 #w2096743
 #pip install --user trafilatura deep-translator langdetect youtube-transcript-api yt-dlp lxml-html-clean
 
-app = Flask(__name__)
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__, template_folder=os.path.join(_BASE_DIR, "templates"))
 app.secret_key = "fyp-learning-curator-secret"
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 init_db()
 
