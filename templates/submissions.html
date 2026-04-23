@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}My Submissions — AI Curator{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4 class="fw-bold mb-0"><i class="bi bi-upload me-2"></i>My Submissions</h4>
+    <small class="text-muted">Resources you've submitted and their current review status.</small>
+</div>
+
+<div id="submissions-list"><p class="text-muted">Loading...</p></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const statusBadge = {
+        pending:  '<span class="badge badge-pending text-white">Pending</span>',
+        approved: '<span class="badge badge-approved text-white">Approved</span>'
+    };
+
+    async function loadSubmissions() {
+        const res = await fetch('/api/my-submissions');
+        const data = await res.json();
+        const container = document.getElementById('submissions-list');
+
+        if (data.length === 0) {
+            container.innerHTML = '<p class="text-muted">You haven\'t submitted anything yet. <a href="/">Go submit a resource.</a></p>';
+            return;
+        }
+
+        container.innerHTML = data.map(r => `
+        <div class="card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h6 class="mb-1 fw-semibold">${r.title}</h6>
+                    <small class="text-muted">
+                        <a href="${r.source}" target="_blank" rel="noopener">
+                            ${r.source.length > 70 ? r.source.slice(0,70)+'...' : r.source}
+                        </a>
+                    </small>
+                </div>
+                <div class="text-end ms-3">
+                    ${statusBadge[r.status] || `<span class="badge bg-secondary">${r.status}</span>`}
+                    <br><small class="text-muted">${r.created_at.slice(0,10)}</small>
+                </div>
+            </div>
+        </div>`).join('');
+    }
+
+    loadSubmissions();
+</script>
+{% endblock %}

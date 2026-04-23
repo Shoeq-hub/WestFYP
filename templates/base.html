@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AI Learning Curator{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+
+        .sidebar {
+            width: 240px;
+            min-height: 100vh;
+            background-color: #2C3E50;
+            position: fixed;
+            top: 0; left: 0;
+            padding-top: 20px;
+            z-index: 100;
+        }
+
+        .sidebar .brand {
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 700;
+            padding: 10px 20px 20px;
+            border-bottom: 1px solid #3d5166;
+            margin-bottom: 10px;
+        }
+
+        .sidebar .nav-link {
+            color: #adb5bd;
+            padding: 10px 20px;
+            border-radius: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            color: #fff;
+            background-color: #3d5166;
+        }
+
+        .sidebar .nav-section {
+            color: #6c757d;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            padding: 12px 20px 4px;
+            letter-spacing: 0.08em;
+        }
+
+        .sidebar .nav-link.text-danger { color: #e74c3c !important; }
+        .sidebar .nav-link.text-danger:hover { background-color: #c0392b; color: #fff !important; }
+
+        .main-content {
+            margin-left: 240px;
+            padding: 30px;
+            min-height: 100vh;
+        }
+
+        .page-header {
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .alert { border-radius: 8px; }
+        .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-radius: 10px; }
+        .badge-pending { background-color: #f39c12; }
+        .badge-approved { background-color: #27ae60; }
+    </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+    <div class="brand"><i class="bi bi-mortarboard-fill me-2"></i>AI Curator</div>
+    <ul class="nav flex-column">
+
+        <!-- Always visible -->
+        <li class="nav-item">
+            <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">
+                <i class="bi bi-house"></i> Home
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.path == '/resources' %}active{% endif %}" href="/resources">
+                <i class="bi bi-collection"></i> Browse Resources
+            </a>
+        </li>
+
+        {% if current_user %}
+            <!-- Logged in -->
+            <li class="nav-section">My Account</li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.path == '/my-submissions' %}active{% endif %}" href="/my-submissions">
+                    <i class="bi bi-upload"></i> My Submissions
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.path == '/likes' %}active{% endif %}" href="/likes">
+                    <i class="bi bi-hand-thumbs-up"></i> My Likes
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.path == '/bookmarks' %}active{% endif %}" href="/bookmarks">
+                    <i class="bi bi-bookmark"></i> Bookmarks
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.path == '/history' %}active{% endif %}" href="/history">
+                    <i class="bi bi-clock-history"></i> History
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.path == '/account' %}active{% endif %}" href="/account">
+                    <i class="bi bi-gear"></i> Account
+                </a>
+            </li>
+
+            {% if current_user.is_admin %}
+                <li class="nav-section">Admin</li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.path == '/admin' %}active{% endif %}" href="/admin">
+                        <i class="bi bi-shield-check"></i> Admin Panel
+                    </a>
+                </li>
+            {% endif %}
+
+            <li class="nav-section">Session</li>
+            <li class="nav-item">
+                <a class="nav-link text-danger" href="#" onclick="logout()">
+                    <i class="bi bi-box-arrow-left"></i> Logout
+                </a>
+            </li>
+
+        {% else %}
+            <!-- Not logged in -->
+            <li class="nav-section">Account</li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.path == '/login' %}active{% endif %}" href="/login">
+                    <i class="bi bi-box-arrow-in-right"></i> Login
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.path == '/register' %}active{% endif %}" href="/register">
+                    <i class="bi bi-person-plus"></i> Register
+                </a>
+            </li>
+        {% endif %}
+
+    </ul>
+
+    {% if current_user %}
+    <div style="position:absolute; bottom:16px; left:0; right:0; padding:0 20px;">
+        <small class="text-secondary">Logged in as</small><br>
+        <small class="text-white fw-semibold">{{ current_user.username }}</small>
+        {% if current_user.is_admin %}
+            <span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;">Admin</span>
+        {% endif %}
+    </div>
+    {% endif %}
+</nav>
+
+<!-- Main Content -->
+<main class="main-content">
+    {% block content %}{% endblock %}
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    async function logout() {
+        await fetch('/api/logout', { method: 'POST' });
+        window.location.href = '/login';
+    }
+
+    function showAlert(containerId, message, type = 'danger') {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        el.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+    }
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

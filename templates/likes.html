@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}My Likes — AI Curator{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4 class="fw-bold mb-0"><i class="bi bi-hand-thumbs-up me-2"></i>My Likes</h4>
+    <small class="text-muted">Resources you've rated. Likes influence your recommendations.</small>
+</div>
+
+<div id="alert-box"></div>
+<div id="likes-list"><p class="text-muted">Loading...</p></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadLikes() {
+        const res = await fetch('/api/feedback');
+        const data = await res.json();
+        const container = document.getElementById('likes-list');
+
+        if (data.length === 0) {
+            container.innerHTML = '<p class="text-muted">You haven\'t rated anything yet. Start from <a href="/">Home</a> or <a href="/resources">Browse</a>.</p>';
+            return;
+        }
+
+        container.innerHTML = data.map(r => {
+            const isLike = r.rating === 1;
+            const badgeClass = isLike ? 'bg-success' : 'bg-danger';
+            const badgeIcon = isLike ? 'bi-hand-thumbs-up-fill' : 'bi-hand-thumbs-down-fill';
+            const badgeLabel = isLike ? 'Liked' : 'Disliked';
+
+            return `
+            <div class="card mb-3 p-3" id="feedback-${r.resource_id}">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1 me-3">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="badge ${badgeClass}">
+                                <i class="bi ${badgeIcon}"></i> ${badgeLabel}
+                            </span>
+                            <h6 class="mb-0 fw-semibold">${r.title}</h6>
+                        </div>
+                        <small class="text-muted">
+                            <a href="${r.source}" target="_blank" rel="noopener">
+                                ${r.source.length > 70 ? r.source.slice(0,70)+'...' : r.source}
+                            </a>
+                        </small>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary ms-2" onclick="removeRating(${r.resource_id})">
+                        <i class="bi bi-x-lg"></i> Remove
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    async function removeRating(resourceId) {
+        const res = await fetch('/api/feedback/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resource_id: resourceId })
+        });
+        if (res.ok) {
+            document.getElementById(`feedback-${resourceId}`).remove();
+            const remaining = document.querySelectorAll('[id^="feedback-"]');
+            if (remaining.length === 0) {
+                document.getElementById('likes-list').innerHTML =
+                    '<p class="text-muted">No ratings yet.</p>';
+            }
+            showAlert('alert-box', 'Rating removed. This will no longer affect your recommendations.', 'success');
+        } else {
+            const d = await res.json();
+            showAlert('alert-box', d.error || 'Could not remove rating');
+        }
+    }
+
+    loadLikes();
+</script>
+{% endblock %}

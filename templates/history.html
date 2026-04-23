@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}History — AI Curator{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h4 class="fw-bold mb-0"><i class="bi bi-clock-history me-2"></i>History</h4>
+        <small class="text-muted">Resources you've interacted with.</small>
+    </div>
+    <button class="btn btn-outline-danger btn-sm" onclick="promptClear()">
+        <i class="bi bi-trash"></i> Clear History
+    </button>
+</div>
+
+<div id="alert-box"></div>
+
+<!-- Confirmation box (hidden by default) -->
+<div id="confirm-box" class="alert alert-warning d-none">
+    <strong>Warning:</strong> Clearing your history will reset your personalised recommendations.
+    <div class="mt-2">
+        <button class="btn btn-danger btn-sm me-2" onclick="confirmClear()">Yes, clear it</button>
+        <button class="btn btn-secondary btn-sm" onclick="cancelClear()">Cancel</button>
+    </div>
+</div>
+
+<div id="history-list"><p class="text-muted">Loading...</p></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadHistory() {
+        const res = await fetch('/api/history');
+        const data = await res.json();
+        const container = document.getElementById('history-list');
+
+        if (data.length === 0) {
+            container.innerHTML = '<p class="text-muted">No history yet. Start exploring resources from <a href="/">Home</a>.</p>';
+            return;
+        }
+
+        container.innerHTML = data.map(r => `
+        <div class="card mb-2 p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1 fw-semibold">${r.title}</h6>
+                    <small class="text-muted">
+                        <a href="${r.source}" target="_blank" rel="noopener">
+                            ${r.source.length > 70 ? r.source.slice(0,70)+'...' : r.source}
+                        </a>
+                    </small>
+                </div>
+                <small class="text-muted text-nowrap ms-3">${r.viewed_at.slice(0,10)}</small>
+            </div>
+        </div>`).join('');
+    }
+
+    function promptClear() {
+        document.getElementById('confirm-box').classList.remove('d-none');
+    }
+
+    function cancelClear() {
+        document.getElementById('confirm-box').classList.add('d-none');
+    }
+
+    async function confirmClear() {
+        const res = await fetch('/api/history/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirm: true })
+        });
+        if (res.ok) {
+            document.getElementById('confirm-box').classList.add('d-none');
+            document.getElementById('history-list').innerHTML =
+                '<p class="text-muted">History cleared.</p>';
+            showAlert('alert-box', 'Your history has been cleared.', 'success');
+        }
+    }
+
+    loadHistory();
+</script>
+{% endblock %}

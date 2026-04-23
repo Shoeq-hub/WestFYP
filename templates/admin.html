@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel — AI Curator{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4 class="fw-bold mb-0"><i class="bi bi-shield-check me-2"></i>Admin Panel</h4>
+    <small class="text-muted">Review and approve submitted resources before they appear in recommendations.</small>
+</div>
+
+<div id="alert-box"></div>
+
+<!-- Pending Queue -->
+<div id="pending-count" class="mb-3"></div>
+<div id="pending-list"><p class="text-muted">Loading...</p></div>
+
+<!-- Password Reset Requests -->
+<div class="mt-5">
+    <h5 class="fw-bold mb-3"><i class="bi bi-key me-2"></i>Password Reset Requests</h5>
+    <div id="reset-requests-list"><p class="text-muted">Loading...</p></div>
+</div>
+
+<!-- Approved History -->
+<div class="mt-5">
+    <h5 class="fw-bold mb-3"><i class="bi bi-check-circle me-2"></i>Approved Resources</h5>
+    <div id="approved-list"><p class="text-muted">Loading...</p></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadApproved() {
+        const res = await fetch('/api/resources');
+        const data = await res.json();
+        const container = document.getElementById('approved-list');
+
+        if (data.length === 0) {
+            container.innerHTML = '<p class="text-muted">No approved resources yet.</p>';
+            return;
+        }
+
+        container.innerHTML = data.map(r => `
+        <div class="card mb-2 p-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h6 class="mb-1 fw-semibold">${r.title}</h6>
+                    <small class="text-muted">
+                        <i class="bi bi-link-45deg"></i>
+                        <a href="${r.source}" target="_blank" rel="noopener">
+                            ${r.source.length > 70 ? r.source.slice(0,70)+'...' : r.source}
+                        </a>
+                    </small><br>
+                    <small class="text-muted"><i class="bi bi-tags"></i> ${r.keywords}</small>
+                </div>
+                <small class="text-muted text-nowrap ms-3">${r.created_at.slice(0,10)}</small>
+            </div>
+        </div>`).join('');
+    }
+
+    async function loadPending() {
+        const res = await fetch('/api/admin/pending');
+        const data = await res.json();
+        const container = document.getElementById('pending-list');
+        const countEl = document.getElementById('pending-count');
+
+        if (data.length === 0) {
+            countEl.innerHTML = '';
+            container.innerHTML = '<p class="text-muted">No pending submissions. All clear!</p>';
+            return;
+        }
+
+        countEl.innerHTML = `<span class="badge bg-warning text-dark">${data.length} pending</span>`;
+
+        container.innerHTML = data.map(r => `
+        <div class="card mb-3 p-3" id="resource-${r.id}">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1 me-3">
+                    <h6 class="mb-1 fw-semibold">${r.title}</h6>
+                    <small class="text-muted">
+                        <i class="bi bi-link-45deg"></i>
+                        <a href="${r.source}" target="_blank" rel="noopener">
+                            ${r.source.length > 80 ? r.source.slice(0,80)+'...' : r.source}
+                        </a>
+                    </small><br>
+                    <small class="text-muted"><i class="bi bi-tags"></i> ${r.keywords}</small><br>
+                    <small class="text-muted">
+                        Submitted by <strong>${r.submitted_by || 'unknown'}</strong>
+                        on ${r.created_at.slice(0,10)}
+                    </small>
+                </div>
+                <div class="d-flex flex-column gap-2">
+                    <button class="btn btn-sm btn-success" onclick="approve(${r.id})">
+                        <i class="bi bi-check-lg"></i> Approve
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="reject(${r.id})">
+                        <i class="bi bi-x-lg"></i> Reject
+                    </button>
+                </div>
+            </div>
+        </div>`).join('');
+    }
+
+    async function approve(resourceId) {
+        const res = await fetch(`/api/admin/approve/${resourceId}`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+            removeCard(resourceId);
+            showAlert('alert-box', data.message, 'success');
+        } else {
+            showAlert('alert-box', data.error || 'Could not approve');
+        }
+    }
+
+    async function reject(resourceId) {
+        const res = await fetch(`/api/admin/reject/${resourceId}`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+            removeCard(resourceId);
+            showAlert('alert-box', data.message, 'warning');
+        } else {
+            showAlert('alert-box', data.error || 'Could not reject');
+        }
+    }
+
+    function removeCard(resourceId) {
+        const card = document.getElementById(`resource-${resourceId}`);
+        if (card) card.remove();
+        const remaining = document.querySelectorAll('[id^="resource-"]');
+        const countEl = document.getElementById('pending-count');
+        if (remaining.length === 0) {
+            countEl.innerHTML = '';
+            document.getElementById('pending-list').innerHTML =
+                '<p class="text-muted">No pending submissions. All clear!</p>';
+        } else {
+            countEl.innerHTML = `<span class="badge bg-warning text-dark">${remaining.length} pending</span>`;
+        }
+    }
+
+    async function loadResetRequests() {
+        const res = await fetch('/api/admin/reset-requests');
+        const data = await res.json();
+        const container = document.getElementById('reset-requests-list');
+
+        if (data.length === 0) {
+            container.innerHTML = '<p class="text-muted">No reset requests.</p>';
+            return;
+        }
+
+        container.innerHTML = data.map(r => `
+        <div class="card mb-2 p-3" id="reset-${r.id}">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1 fw-semibold">${r.username}</h6>
+                    <small class="text-muted">Requested on ${r.requested_at.slice(0,10)}</small>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <input type="text" class="form-control form-control-sm" id="newpw-${r.user_id}"
+                           placeholder="New password" style="width:160px">
+                    <button class="btn btn-sm btn-primary" onclick="resetPassword(${r.user_id}, ${r.id})">
+                        Reset
+                    </button>
+                </div>
+            </div>
+        </div>`).join('');
+    }
+
+    async function resetPassword(userId, requestId) {
+        const newPassword = document.getElementById(`newpw-${userId}`).value.trim();
+        if (!newPassword) {
+            showAlert('alert-box', 'Please enter a new password');
+            return;
+        }
+
+        const res = await fetch('/api/admin/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, new_password: newPassword })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            document.getElementById(`reset-${requestId}`).remove();
+            const remaining = document.querySelectorAll('[id^="reset-"]');
+            if (remaining.length === 0) {
+                document.getElementById('reset-requests-list').innerHTML =
+                    '<p class="text-muted">No reset requests.</p>';
+            }
+            showAlert('alert-box', data.message, 'success');
+        } else {
+            showAlert('alert-box', data.error || 'Could not reset password');
+        }
+    }
+
+    loadPending();
+    loadApproved();
+    loadResetRequests();
+</script>
+{% endblock %}

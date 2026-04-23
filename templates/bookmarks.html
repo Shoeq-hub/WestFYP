@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Bookmarks — AI Curator{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4 class="fw-bold mb-0"><i class="bi bi-bookmark me-2"></i>Bookmarks</h4>
+    <small class="text-muted">Resources you've saved for later.</small>
+</div>
+
+<div id="alert-box"></div>
+<div id="bookmarks-list"><p class="text-muted">Loading...</p></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadBookmarks() {
+        const res = await fetch('/api/bookmarks');
+        const data = await res.json();
+        const container = document.getElementById('bookmarks-list');
+
+        if (data.length === 0) {
+            container.innerHTML = '<p class="text-muted">No bookmarks yet. Start bookmarking resources from <a href="/">Home</a> or <a href="/resources">Browse</a>.</p>';
+            return;
+        }
+
+        container.innerHTML = data.map(r => `
+        <div class="card mb-3 p-3" id="bookmark-${r.id}">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h6 class="mb-1 fw-semibold">${r.title}</h6>
+                    <small class="text-muted">
+                        <i class="bi bi-link-45deg"></i>
+                        <a href="${r.source}" target="_blank" rel="noopener">
+                            ${r.source.length > 70 ? r.source.slice(0,70)+'...' : r.source}
+                        </a>
+                    </small><br>
+                    <small class="text-muted">Saved on ${r.saved_at.slice(0,10)}</small>
+                </div>
+                <button class="btn btn-sm btn-outline-danger ms-3" onclick="removeBookmark(${r.id})">
+                    <i class="bi bi-trash"></i> Remove
+                </button>
+            </div>
+        </div>`).join('');
+    }
+
+    async function removeBookmark(resourceId) {
+        const res = await fetch('/api/bookmarks/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resource_id: resourceId })
+        });
+        if (res.ok) {
+            document.getElementById(`bookmark-${resourceId}`).remove();
+            const remaining = document.querySelectorAll('[id^="bookmark-"]');
+            if (remaining.length === 0) {
+                document.getElementById('bookmarks-list').innerHTML =
+                    '<p class="text-muted">No bookmarks yet.</p>';
+            }
+        } else {
+            const d = await res.json();
+            showAlert('alert-box', d.error || 'Could not remove bookmark');
+        }
+    }
+
+    loadBookmarks();
+</script>
+{% endblock %}

@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Browse Resources — AI Curator{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4 class="fw-bold mb-0"><i class="bi bi-collection me-2"></i>Browse Resources</h4>
+    <small class="text-muted">All approved learning materials available in the system.</small>
+</div>
+
+<div id="alert-box"></div>
+<div id="resources-list"><p class="text-muted">Loading...</p></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const isLoggedIn = {{ 'true' if current_user else 'false' }};
+    let userFeedback = {};
+
+    async function loadUserFeedback() {
+        if (!isLoggedIn) return;
+        const res = await fetch('/api/feedback');
+        const data = await res.json();
+        data.forEach(f => userFeedback[f.resource_id] = f.rating);
+    }
+
+    async function loadResources() {
+        await loadUserFeedback();
+        const res = await fetch('/api/resources');
+        const data = await res.json();
+        const container = document.getElementById('resources-list');
+
+        if (data.length === 0) {
+            container.innerHTML = '<p class="text-muted">No resources available yet.</p>';
+            return;
+        }
+
+        container.innerHTML = data.map(r => {
+            const existingRating = userFeedback[r.id];
+            const likeActive    = existingRating === 1  ? 'btn-success active' : 'btn-outline-success';
+            const dislikeActive = existingRating === -1 ? 'btn-danger active'  : 'btn-outline-danger';
+
+            return `
+            <div class="card mb-3 p-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="mb-1 fw-semibold">${r.title}</h6>
+                        <small class="text-muted">
+                            <i class="bi bi-link-45deg"></i>
+                            <a href="${r.source}" target="_blank" rel="noopener" onclick="logHistory(${r.id})">
+                                ${r.source.length > 70 ? r.source.slice(0,70)+'...' : r.source}
+                            </a>
+                        </small><br>
+                        <small class="text-muted"><i class="bi bi-tags"></i> ${r.keywords}</small>
+                    </div>
+                    <small class="text-muted text-nowrap ms-2">${r.created_at.slice(0,10)}</small>
+                </div>
+                ${isLoggedIn ? `
+                <div class="mt-2 d-flex gap-2">
+                    <button class="btn btn-sm ${likeActive}" id="like-${r.id}"
+                        onclick="sendFeedback(${r.id}, 1)">
+                        <i class="bi bi-hand-thumbs-up"></i> Like
+                    </button>
+                    <button class="btn btn-sm ${dislikeActive}" id="dislike-${r.id}"
+                        onclick="sendFeedback(${r.id}, -1)">
+                        <i class="bi bi-hand-thumbs-down"></i> Dislike
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="addBookmark(${r.id}, this)">
+                        <i class="bi bi-bookmark"></i> Bookmark
+                    </button>
+                </div>` : ''}
+            </div>`;
+        }).join('');
+    }
+
+    async function logHistory(resourceId) {
+        if (!isLoggedIn) return;
+        await fetch('/api/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resource_id: resourceId })
+        });
+    }
+
+    async function sendFeedback(resourceId, rating) {
+        const current = userFeedback[resourceId];
+        if (current === rating) {
+            const res = await fetch('/api/feedback/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ resource_id: resourceId })
+            });
+            if (res.ok) {
+                delete userFeedback[resourceId];
+                resetButtons(resourceId);
+            }
+        } else {
+            const res = await fetch('/api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ resource_id: resourceId, rating })
+            });
+            if (res.ok) {
+                userFeedback[resourceId] = rating;
+                updateButtons(resourceId, rating);
+            }
+        }
+    }
+
+    function updateButtons(resourceId, rating) {
+        const likeBtn    = document.getElementById(`like-${resourceId}`);
+        const dislikeBtn = document.getElementById(`dislike-${resourceId}`);
+        if (!likeBtn || !dislikeBtn) return;
+        likeBtn.className    = `btn btn-sm ${rating === 1  ? 'btn-success active' : 'btn-outline-success'}`;
+        dislikeBtn.className = `btn btn-sm ${rating === -1 ? 'btn-danger active'  : 'btn-outline-danger'}`;
+    }
+
+    function resetButtons(resourceId) {
+        const likeBtn    = document.getElementById(`like-${resourceId}`);
+        const dislikeBtn = document.getElementById(`dislike-${resourceId}`);
+        if (!likeBtn || !dislikeBtn) return;
+        likeBtn.className    = 'btn btn-sm btn-outline-success';
+        dislikeBtn.className = 'btn btn-sm btn-outline-danger';
+    }
+
+    async function addBookmark(resourceId, btn) {
+        const res = await fetch('/api/bookmark', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resource_id: resourceId })
+        });
+        if (res.ok) {
+            btn.innerHTML = '<i class="bi bi-bookmark-fill"></i> Saved';
+            btn.disabled = true;
+        } else {
+            const d = await res.json();
+            showAlert('alert-box', d.error || 'Could not bookmark');
+        }
+    }
+
+    loadResources();
+</script>
+{% endblock %}

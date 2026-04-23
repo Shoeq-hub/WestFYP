@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Account — AI Curator{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4 class="fw-bold mb-0"><i class="bi bi-gear me-2"></i>Account Settings</h4>
+    <small class="text-muted">Manage your account details.</small>
+</div>
+
+<div class="row">
+    <div class="col-md-5">
+        <div class="card p-4">
+            <h6 class="fw-semibold mb-3">Change Password</h6>
+            <div id="alert-box"></div>
+            <form id="change-password-form">
+                <div class="mb-3">
+                    <label class="form-label">Current Password</label>
+                    <input type="password" id="old-password" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">New Password</label>
+                    <input type="password" id="new-password" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Update Password</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('change-password-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const old_password = document.getElementById('old-password').value;
+        const new_password = document.getElementById('new-password').value;
+
+        const res = await fetch('/api/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ old_password, new_password })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            showAlert('alert-box', 'Password changed successfully!', 'success');
+            document.getElementById('change-password-form').reset();
+        } else {
+            showAlert('alert-box', data.error || 'Something went wrong');
+        }
+    });
+</script>
+{% endblock %}

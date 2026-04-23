@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}Home — AI Curator{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h4 class="fw-bold mb-0"><i class="bi bi-stars me-2"></i>Get Recommendations</h4>
+    <small class="text-muted">Type a topic and discover curated learning resources.</small>
+</div>
+
+<!-- Search form -->
+<div class="card p-4 mb-4">
+    <div id="alert-box"></div>
+    <form id="recommend-form" class="d-flex gap-2 mb-3">
+        <input type="text" id="preferences" class="form-control"
+               placeholder="e.g. python, machine learning, web development..." required>
+        <button type="submit" class="btn btn-primary px-4">
+            <i class="bi bi-search"></i> Search
+        </button>
+    </form>
+    {% if current_user %}
+    <div class="btn-group" role="group">
+        <input type="radio" class="btn-check" name="source-filter" id="filter-all" value="all" checked>
+        <label class="btn btn-outline-secondary btn-sm" for="filter-all">
+            <i class="bi bi-collection"></i> All Resources
+        </label>
+        <input type="radio" class="btn-check" name="source-filter" id="filter-mine" value="mine">
+        <label class="btn btn-outline-secondary btn-sm" for="filter-mine">
+            <i class="bi bi-person"></i> My Submissions Only
+        </label>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Submit a URL -->
+{% if current_user %}
+<div class="card p-4 mb-4">
+    <h6 class="fw-semibold mb-3"><i class="bi bi-upload me-2"></i>Submit a Resource</h6>
+    <div id="submit-alert"></div>
+    <div class="d-flex gap-2">
+        <input type="text" id="submit-url" class="form-control"
+               placeholder="Paste a YouTube or article URL...">
+        <button class="btn btn-outline-primary px-4" onclick="submitUrl()">Submit</button>
+    </div>
+    <small class="text-muted mt-2 d-block">Submitted resources go to admin review before appearing in recommendations.</small>
+</div>
+{% endif %}
+
+<!-- Results -->
+<div id="results"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const isLoggedIn = {{ 'true' if current_user else 'false' }};
+    let userFeedback = {}; // { resource_id: rating }
+
+    async function loadUserFeedback() {
+        if (!isLoggedIn) return;
+        const res = await fetch('/api/feedback');
+        const data = await res.json();
+        data.forEach(f => userFeedback[f.resource_id] = f.rating);
+    }
+
+    document.getElementById('recommend-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const preferences = document.getElementById('preferences').value.trim();
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = '<p class="text-muted">Loading...</p>';
+
+        await loadUserFeedback();
+
+        const filterEl = document.querySelector('input[name="source-filter"]:checked');
+        const my_submissions_only = filterEl ? filterEl.value === 'mine' : false;
+
+        const res = await fetch('/api/recommend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ preferences, my_submissions_only })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            resultsDiv.innerHTML = `<p class="text-muted">${data.error || 'Something went wrong.'}</p>`;
+            return;
+        }
+
+        // Handle warning response (too few submissions)
+        let results = data;
+        let warningHtml = '';
+        if (data.warning) {
+            warningHtml = `<div class="alert alert-warning">${data.message}</div>`;
+            results = data.results;
+        }
+
+        if (!results || results.length === 0) {
+            resultsDiv.innerHTML = warningHtml + '<p class="text-muted">No results found. Try different keywords or switch to All Resources.</p>';
+            return;
+        }
+
+        resultsDiv.innerHTML = warningHtml + `
+            <h6 class="fw-semibold mb-3">Results</h6>
+            ${results.map(r => resourceCard(r)).join('')}
+        `;
+    });
+
+    function resourceCard(r) {
+        const score = (r.similarity * 100).toFixed(1);
+        const existingRating = userFeedback[r.id];
+        const likeActive   = existingRating === 1  ? 'btn-success active' : 'btn-outline-success';
+        const dislikeActive= existingRating === -1 ? 'btn-danger active'  : 'btn-outline-danger';
+
+        return `
+        <div class="card mb-3 p-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h6 class="mb-1 fw-semibold">${r.title}</h6>
+                    <small class="text-muted"><i class="bi bi-link-45deg"></i>
+                        <a href="${r.source}" target="_blank" rel="noopener" onclick="logHistory(${r.id})">
+                            ${r.source.length > 60 ? r.source.slice(0,60)+'...' : r.source}
+                        </a>
+                    </small><br>
+                    <small class="text-muted"><i class="bi bi-tags"></i> ${r.keywords}</small>
+                </div>
+                <span class="badge bg-primary ms-2">${score}% match</span>
+            </div>
+            ${isLoggedIn ? `
+            <div class="mt-2 d-flex gap-2 flex-wrap">
+                <button class="btn btn-sm ${likeActive}" id="like-${r.id}"
+                    onclick="sendFeedback(${r.id}, 1)">
+                    <i class="bi bi-hand-thumbs-up"></i> Like
+                </button>
+                <button class="btn btn-sm ${dislikeActive}" id="dislike-${r.id}"
+                    onclick="sendFeedback(${r.id}, -1)">
+                    <i class="bi bi-hand-thumbs-down"></i> Dislike
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="addBookmark(${r.id}, this)">
+                    <i class="bi bi-bookmark"></i> Bookmark
+                </button>
+            </div>` : `<small class="text-muted mt-2 d-block"><a href="/login">Login</a> to like, dislike or bookmark.</small>`}
+        </div>`;
+    }
+
+    async function sendFeedback(resourceId, rating) {
+        const current = userFeedback[resourceId];
+
+        if (current === rating) {
+            // Same rating clicked — toggle off (remove)
+            const res = await fetch('/api/feedback/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ resource_id: resourceId })
+            });
+            if (res.ok) {
+                delete userFeedback[resourceId];
+                resetButtons(resourceId);
+            }
+        } else {
+            // New or switched rating
+            const res = await fetch('/api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ resource_id: resourceId, rating })
+            });
+            if (res.ok) {
+                userFeedback[resourceId] = rating;
+                updateButtons(resourceId, rating);
+            }
+        }
+    }
+
+    function updateButtons(resourceId, rating) {
+        const likeBtn    = document.getElementById(`like-${resourceId}`);
+        const dislikeBtn = document.getElementById(`dislike-${resourceId}`);
+        if (!likeBtn || !dislikeBtn) return;
+        likeBtn.className    = `btn btn-sm ${rating === 1  ? 'btn-success active' : 'btn-outline-success'}`;
+        dislikeBtn.className = `btn btn-sm ${rating === -1 ? 'btn-danger active'  : 'btn-outline-danger'}`;
+    }
+
+    function resetButtons(resourceId) {
+        const likeBtn    = document.getElementById(`like-${resourceId}`);
+        const dislikeBtn = document.getElementById(`dislike-${resourceId}`);
+        if (!likeBtn || !dislikeBtn) return;
+        likeBtn.className    = 'btn btn-sm btn-outline-success';
+        dislikeBtn.className = 'btn btn-sm btn-outline-danger';
+    }
+
+    async function logHistory(resourceId) {
+        await fetch('/api/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resource_id: resourceId })
+        });
+    }
+
+    async function addBookmark(resourceId, btn) {
+        const res = await fetch('/api/bookmark', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resource_id: resourceId })
+        });
+        if (res.ok) {
+            btn.innerHTML = '<i class="bi bi-bookmark-fill"></i> Saved';
+            btn.disabled = true;
+        } else {
+            const data = await res.json();
+            showAlert('alert-box', data.error || 'Could not bookmark');
+        }
+    }
+
+    async function submitUrl() {
+        const url = document.getElementById('submit-url').value.trim();
+        if (!url) return;
+        showAlert('submit-alert', 'Processing URL, please wait...', 'info');
+        const res = await fetch('/api/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showAlert('submit-alert', 'Submitted for admin review!', 'success');
+            document.getElementById('submit-url').value = '';
+        } else {
+            showAlert('submit-alert', data.error || 'Submission failed');
+        }
+    }
+</script>
+{% endblock %}
