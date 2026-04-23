@@ -12,6 +12,7 @@ from learningrec import recommend_resources
 from yttrans import transcript_to_row
 from article_scrape import article_to_row
 #w2096743
+#pip install --user trafilatura deep-translator langdetect youtube-transcript-api yt-dlp lxml-html-clean
 
 app = Flask(__name__)
 app.secret_key = "fyp-learning-curator-secret"
@@ -86,9 +87,7 @@ def is_youtube_url(url):
     return "youtube.com" in url or "youtu.be" in url
 
 
-# ============================================================
 # PAGE ROUTES (render HTML)
-# ============================================================
 
 @app.route("/")
 def index():
@@ -152,12 +151,9 @@ def admin_page():
         return redirect(url_for("index"))
     return render_template("admin.html")
 
+# API ROUTES (return JSON, by JavaScript)
 
-# ============================================================
-# API ROUTES (return JSON, called by JavaScript)
-# ============================================================
-
-# --- Auth ---
+#  Auth 
 
 @app.route("/api/register", methods=["POST"])
 def api_register():
